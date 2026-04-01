@@ -1,7 +1,9 @@
 import { useState, useMemo } from "react";
 
-// Допоміжна функція для класів
+// Допоміжна функція для об'єднання класів Tailwind
 const cn = (...classes) => classes.filter(Boolean).join(" ");
+
+// --- КОНСТАНТИ ---
 
 const ACTIVITY_LEVELS = [
   { id: 1, multiplier: 1.2, label: "Мінімальна", desc: "Сидяча робота, без спорту" },
@@ -12,10 +14,12 @@ const ACTIVITY_LEVELS = [
 ];
 
 const GOALS = [
-  { id: "cut", label: "Схуднення", adj: -200, pMulti: 2.2 }, // Змінено на 200
+  { id: "cut", label: "Схуднення", adj: -200, pMulti: 2.2 },
   { id: "maintain", label: "Підтримка", adj: 0, pMulti: 2 },
-  { id: "bulk", label: "Набір", adj: 200, pMulti: 1.8 },    // Змінено на 200
+  { id: "bulk", label: "Набір", adj: 200, pMulti: 1.8 },
 ];
+
+// --- ОСНОВНИЙ КОМПОНЕНТ ---
 
 export default function App() {
   const [weight, setWeight] = useState("75");
@@ -24,9 +28,9 @@ export default function App() {
   const [gender, setGender] = useState("male");
   const [activity, setActivity] = useState(1.55);
   const [goalId, setGoalId] = useState("maintain");
-  const [bodyFat, setBodyFat] = useState(20);
+  const [bodyFat, setBodyFat] = useState(15);
 
-  // Головний розрахунок
+  // Головна логіка розрахунку та валідації
   const result = useMemo(() => {
     const w = parseFloat(weight);
     const h = parseFloat(height);
@@ -35,11 +39,27 @@ export default function App() {
 
     if (!w || !h || !a || isNaN(bf)) return null;
 
-    // Формула Катча-МакАрдла (точна по жиру)
-    const lbm = w * (1 - bf / 100);
-    const bmr = 370 + (21.6 * lbm);
+    // Перевірка на адекватність даних (Жарти)
+    if (a > 110) return "Ого! Ви певно бачили як будували піраміди? Не балуйся, введи реальний вік.";
+    if (a < 12) return "Тобі ще зарано рахувати КБЖУ, йди краще з'їж морозиво! 🍦";
+    if (h > 250) return "Привіт Гуллівере! Зріст вище 2.5м? Давай чесно. 🏀";
+    if (h < 100) return "Це зріст для садового гнома. Введи реальні дані. 🍄";
+    if (w > 300) return "Вага 300+? Ти що, молодий слоник? Не балуйся. 🐘";
+    if (w < 30) return "Вага як у котика. Введи справжню вагу. 🐈";
+
+    // Розрахунок BMR за формулою Міффліна-Сан Жеора (чутлива до віку та зросту)
+    let bmr;
+    if (gender === "male") {
+      bmr = (10 * w) + (6.25 * h) - (5 * a) + 5;
+    } else {
+      bmr = (10 * w) + (6.25 * h) - (5 * a) - 161;
+    }
+
+    // Корекція на високий відсоток жиру
+    const isOverweight = (gender === "male" && bf > 28) || (gender === "female" && bf > 35);
+    const adjustedBmr = isOverweight ? bmr * 0.95 : bmr;
     
-    const tdee = bmr * activity;
+    const tdee = adjustedBmr * activity;
     const currentGoal = GOALS.find(g => g.id === goalId);
     const totalCalories = tdee + currentGoal.adj;
 
@@ -52,9 +72,9 @@ export default function App() {
       protein: Math.round(protein),
       fat: Math.round(fat),
       carbs: Math.round(Math.max(0, carbs)),
-      bmr: Math.round(bmr)
+      bmr: Math.round(adjustedBmr)
     };
-  }, [weight, height, age, activity, goalId, bodyFat]);
+  }, [weight, height, age, activity, goalId, bodyFat, gender]);
 
   const fats = gender === "male" ? [10, 15, 20, 25, 30, 35, 40] : [16, 20, 24, 28, 32, 36, 42];
 
@@ -73,11 +93,11 @@ export default function App() {
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="ml-2 text-xs font-bold uppercase text-slate-400">Вага</label>
+              <label className="ml-2 text-xs font-bold uppercase text-slate-400">Вага (кг)</label>
               <input type="number" value={weight} onChange={e => setWeight(e.target.value)} className="w-full p-3 border-none outline-none bg-slate-50 rounded-2xl focus:ring-2 focus:ring-blue-400" />
             </div>
             <div>
-              <label className="ml-2 text-xs font-bold uppercase text-slate-400">Зріст</label>
+              <label className="ml-2 text-xs font-bold uppercase text-slate-400">Зріст (см)</label>
               <input type="number" value={height} onChange={e => setHeight(e.target.value)} className="w-full p-3 border-none outline-none bg-slate-50 rounded-2xl focus:ring-2 focus:ring-blue-400" />
             </div>
             <div>
@@ -127,28 +147,35 @@ export default function App() {
         <div className="lg:col-span-5">
           <div className="sticky space-y-6 top-10">
             {result ? (
-              <div key={result.calories} className="bg-slate-900 text-white p-8 rounded-[2rem] shadow-2xl shadow-blue-200 animate-in fade-in zoom-in duration-300">
-                <p className="mb-2 text-xs font-bold tracking-widest text-center text-blue-400 uppercase">Твоя добова норма</p>
-                <h2 className="mb-8 text-6xl font-black text-center">
-                  {result.calories} <span className="text-xl font-light text-slate-400">ккал</span>
-                </h2>
-
-                <div className="space-y-4">
-                  <MacroRow label="Білки" value={result.protein} color="bg-yellow-400" total={result.calories} cal={result.protein * 4} />
-                  <MacroRow label="Жири" value={result.fat} color="bg-red-500" total={result.calories} cal={result.fat * 9} />
-                  <MacroRow label="Вуглеводи" value={result.carbs} color="bg-blue-400" total={result.calories} cal={result.carbs * 4} />
+              typeof result === "string" ? (
+                <div className="bg-amber-100 border-2 border-amber-400 p-8 rounded-[2rem] text-center animate-bounce shadow-xl shadow-amber-200">
+                  <p className="mb-4 text-5xl">🤡</p>
+                  <p className="font-black leading-relaxed text-amber-900">{result}</p>
                 </div>
+              ) : (
+                <div key={result.calories} className="bg-slate-900 text-white p-8 rounded-[2rem] shadow-2xl shadow-blue-200 animate-in fade-in zoom-in duration-300">
+                  <p className="mb-2 text-xs font-bold tracking-widest text-center text-blue-400 uppercase">Твоя добова норма</p>
+                  <h2 className="mb-8 text-6xl font-black text-center">
+                    {result.calories} <span className="text-xl font-light text-slate-400">ккал</span>
+                  </h2>
 
-                <div className="pt-6 mt-8 text-center border-t border-slate-800">
-                  <p className="text-xs text-slate-500">Базовий метаболізм (BMR): {result.bmr} ккал</p>
-                  <p className="text-slate-500 text-[10px] mt-2 leading-relaxed">
-                    Розраховано за формулою Катча-МакАрдла на основі сухої маси тіла ({Math.round(parseFloat(weight) * (1 - bodyFat / 100))} кг).
-                  </p>
+                  <div className="space-y-4">
+                    <MacroRow label="Білки" value={result.protein} color="bg-yellow-400" total={result.calories} cal={result.protein * 4} />
+                    <MacroRow label="Жири" value={result.fat} color="bg-red-500" total={result.calories} cal={result.fat * 9} />
+                    <MacroRow label="Вуглеводи" value={result.carbs} color="bg-blue-400" total={result.calories} cal={result.carbs * 4} />
+                  </div>
+
+                  <div className="pt-6 mt-8 text-center border-t border-slate-800">
+                    <p className="text-xs text-slate-500">Базовий метаболізм (BMR): {result.bmr} ккал</p>
+                    <p className="text-slate-500 text-[10px] mt-4 leading-relaxed opacity-50">
+                      Використовується формула Міффліна-Сан Жеора з корекцією на відсоток жиру тіла ({bodyFat}%).
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )
             ) : (
               <div className="bg-white p-10 rounded-[2rem] text-center border-2 border-dashed border-slate-200">
-                <p className="text-slate-400">Заповніть усі дані для розрахунку</p>
+                <p className="italic text-slate-400">Заповніть усі дані профілю, щоб побачити магію цифр ✨</p>
               </div>
             )}
           </div>
@@ -159,8 +186,9 @@ export default function App() {
   );
 }
 
+// Допоміжний компонент для рядків БЖУ
 function MacroRow({ label, value, color, total, cal }) {
-  const percent = Math.round((cal / total) * 100);
+  const percent = total > 0 ? Math.round((cal / total) * 100) : 0;
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-sm font-bold">
